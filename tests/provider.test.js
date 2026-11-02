@@ -14,18 +14,16 @@ test('base URLs normalize correctly in development', () => {
     assert.throws(() => normalizeBaseUrl('file:///etc/passwd'));
   } finally { if (prev === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prev; }
 });
-test('production enforces explicitly allowed HTTPS provider hostnames', () => {
+test('production accepts dynamic public HTTPS hosts and rejects unsafe URLs', () => {
   const prev = process.env.NODE_ENV;
-  const hosts = process.env.ALLOWED_PROVIDER_HOSTS;
   process.env.NODE_ENV = 'production';
-  process.env.ALLOWED_PROVIDER_HOSTS = 'api.example.com';
   try {
-    assert.equal(normalizeBaseUrl('https://api.example.com/v1'), 'https://api.example.com/v1');
-    assert.throws(() => normalizeBaseUrl('https://internal.example.net/v1'), /tidak diizinkan/);
-    assert.throws(() => normalizeBaseUrl('http://api.example.com/v1'), /tidak diizinkan/);
-    assert.throws(() => normalizeBaseUrl('https://user:pass@api.example.com/v1'), /kredensial/);
+    assert.equal(normalizeBaseUrl('https://provider.example.net/v1'), 'https://provider.example.net/v1');
+    assert.throws(() => normalizeBaseUrl('http://provider.example.net/v1'), /HTTPS publik/);
+    assert.throws(() => normalizeBaseUrl('https://localhost/v1'), /HTTPS publik/);
+    assert.throws(() => normalizeBaseUrl('https://127.0.0.1/v1'), /HTTPS publik/);
+    assert.throws(() => normalizeBaseUrl('https://user:pass@provider.example.net/v1'), /kredensial/);
   } finally {
     if (prev === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prev;
-    if (hosts === undefined) delete process.env.ALLOWED_PROVIDER_HOSTS; else process.env.ALLOWED_PROVIDER_HOSTS = hosts;
   }
 });
