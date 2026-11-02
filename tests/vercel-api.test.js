@@ -16,7 +16,7 @@ test('Vercel entrypoint exports a working Express API', async () => {
     const payload = await health.json();
     assert.equal(payload.ok, true);
 
-    const models = await fetch(root + '/demo/v1/models');
+    const models = await fetch(root + '/demo/v1/models', {headers: {authorization: 'Bearer demo-key'}});
     assert.equal(models.status, 200);
     assert.match(models.headers.get('content-type') || '', /application\/json/);
     const missing = await fetch(root + '/api/not-an-endpoint');
