@@ -19,7 +19,10 @@ while `vercel.json` forwards API and demo traffic to that function.
 ## After deployment
 1. Open `https://YOUR-PROJECT.vercel.app/api/health`. It should return JSON
    including `"ok":true`.
-2. Check `/demo/v1/models` for a JSON list of simulated models.
+2. Check the demo model endpoint with its required demo credential:
+   `curl -H 'Authorization: Bearer demo-key' https://YOUR-PROJECT.vercel.app/demo/v1/models`
+   A browser visit without this header should return HTTP 401 (expected).
+
 3. Test `/api/validate` and `/api/benchmark` with a trusted provider you
    control. Do not paste API keys into public screenshots.
 4. If the endpoint returns HTML, a 404, or a function error, inspect Vercel's
