@@ -1,5 +1,7 @@
 import { encode } from 'gpt-tokenizer';
 import { performance } from 'node:perf_hooks';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 
 const MODELS_TIMEOUT_MS = 25_000;
 const CHAT_TIMEOUT_MS = 180_000;
@@ -82,19 +84,52 @@ export function normalizeBaseUrl(raw) {
 }
 
 
-// A public deployment must explicitly opt in to each upstream provider.
-// Restricting hostnames blocks arbitrary client-provided internal URLs.
+// Dynamic providers are supported, but only over public HTTPS in production.
+// Hostnames, credentials, and IP literals are validated synchronously here.
+// DNS addresses are checked immediately before outbound requests below.
 export function enforceProviderHostPolicy(rawUrl) {
   const url = new URL(rawUrl);
-  const host = url.hostname.toLowerCase().replace(/\\.$/, '');
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
   if (url.username || url.password) {
     throw new ProviderError('URL provider tidak boleh memuat kredensial.', { code: 'invalid_url' });
   }
   if (process.env.NODE_ENV !== 'production') return;
-  const allowed = (process.env.ALLOWED_PROVIDER_HOSTS || '').split(',')
-    .map((value) => value.trim().toLowerCase()).filter(Boolean);
-  if (url.protocol !== 'https:' || !allowed.includes(host) || !allowed.length) {
-    throw new ProviderError('Host provider tidak diizinkan. Atur ALLOWED_PROVIDER_HOSTS pada deployment.', { code: 'host_not_allowed' });
+  if (url.protocol !== 'https:' || !host || host === 'localhost' || host.endsWith('.localhost') ||
+      host.endsWith('.local') || host.endsWith('.internal') || host.includes('%') ||
+      host.startsWith('[') || /^[0-9.]+$/.test(host)) {
+    throw new ProviderError('Provider harus menggunakan hostname HTTPS publik.', { code: 'host_not_allowed' });
+  }
+}
+
+
+// Defense in depth against private-network SSRF. Redirects are forbidden.
+// DNS rebinding between lookup and connection still requires network egress controls
+// for a fully untrusted public service.
+function publicIp(address) {
+  if (address.includes(':')) {
+    const value = address.toLowerCase();
+    return !(/^(::|::1|fe80:|fc|fd|ff|2001:db8:)/.test(value) ||
+      value.startsWith('::ffff:') || value.startsWith('2001:0:'));
+  }
+  const nums = address.split('.').map(Number);
+  if (nums.length !== 4 || nums.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a,b,c] = nums;
+  return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 168 || (b === 0 && (c === 0 || c === 2)))) ||
+    (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+    (a === 203 && b === 0 && c === 113));
+}
+async function validateOutboundUrl(rawUrl) {
+  enforceProviderHostPolicy(rawUrl);
+  if (process.env.NODE_ENV !== 'production') return;
+  const host = new URL(rawUrl).hostname;
+  if (isIP(host)) throw new ProviderError('Alamat IP langsung tidak diizinkan.', { code: 'host_not_allowed' });
+  let addresses;
+  try { addresses = await lookup(host, { all: true, verbatim: true }); }
+  catch { throw new ProviderError('DNS provider tidak dapat ditemukan.', { code: 'dns_failed' }); }
+  if (!addresses.length || addresses.some(({ address }) => !publicIp(address))) {
+    throw new ProviderError('DNS provider mengarah ke jaringan privat atau tidak aman.', { code: 'host_not_allowed' });
   }
 }
 
@@ -399,6 +434,7 @@ async function fetchModelsAt(baseUrl, apiKey, signal) {
   try {
     response = await fetch(endpoint(baseUrl, 'models'), {
       method: 'GET',
+      redirect: 'error',
       headers: {
         Accept: 'application/json',
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
@@ -625,8 +661,10 @@ async function requestChat({
       }
 
       try {
+        await validateOutboundUrl(url);
         const response = await fetch(url, {
           method: 'POST',
+          redirect: 'error',
           headers: {
             'Content-Type': 'application/json',
             Accept: 'text/event-stream',
