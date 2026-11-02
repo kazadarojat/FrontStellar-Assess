@@ -474,9 +474,12 @@ app.use((error, req, res, next) => {
   return res.status(error?.status || 500).json({ ok: false, message });
 });
 
-app.listen(PORT, HOST, () => {
+if (!process.env.VERCEL) app.listen(PORT, HOST, () => {
   console.log(`FrontStellar Assess API berjalan di http://localhost:${PORT} (bind ${HOST})`);
   if (!existsSync(indexFile)) {
     console.log('Frontend dev: jalankan Vite (npm run dev) untuk membuka antarmuka.');
   }
 });
+
+// Vercel serverless function imports the app without opening a listening port.
+export default app;
