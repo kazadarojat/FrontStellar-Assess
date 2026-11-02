@@ -96,6 +96,13 @@ import {
   type SavedProvider,
   type StoredProvider,
 } from './providerStorage';
+import {
+  IS_STATIC_DEMO,
+  LOCAL_DEMO_BASE,
+  STATIC_DEMO_LABEL,
+  isLocalDemoProvider,
+} from './staticMode';
+import { streamLocalDemo } from './localDemo';
 
 const MAX_MODELS = 100;
 const MAX_PROVIDERS = 6;
@@ -1310,6 +1317,9 @@ export default function App() {
       })),
     );
 
+    // Demo statis (GitHub Pages) dijalankan di browser; provider nyata tetap lewat server lokal.
+    const localDemoRun = chosen.every(({ provider }) => isLocalDemoProvider(provider.baseUrl));
+
     const controller = new AbortController();
     runAbortRef.current = controller;
     const runId = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1332,26 +1342,33 @@ export default function App() {
     }, 80);
 
     try {
-      await streamBenchmark(
-        {
-          providers: chosen.map(({ provider, models }) => ({
-            id: provider.id,
-            label: provider.label,
-            baseUrl: provider.baseUrl,
-            resolvedBaseUrl: provider.resolvedBaseUrl,
-            apiKey: provider.apiKey,
-            models,
-          })),
-          prompt,
-          systemPrompt,
-          temperature,
-          maxTokens,
-          concurrency,
-          repetitions,
-        },
-        handleRunEvent,
-        controller.signal,
-      );
+      const request = {
+        providers: chosen.map(({ provider, models }) => ({
+          id: provider.id,
+          label: provider.label,
+          baseUrl: provider.baseUrl,
+          resolvedBaseUrl: provider.resolvedBaseUrl,
+          apiKey: provider.apiKey,
+          models,
+        })),
+        prompt,
+        systemPrompt,
+        temperature,
+        maxTokens,
+        concurrency,
+        repetitions,
+      };
+
+      if (localDemoRun) {
+        await streamLocalDemo(request, handleRunEvent, controller.signal);
+      } else if (IS_STATIC_DEMO) {
+        throw new ApiError(
+          'GitHub Pages bersifat statis. Benchmark provider nyata memerlukan server lokal — jalankan "npm start" lalu buka http://localhost:8787.',
+        );
+      } else {
+        await streamBenchmark(request, handleRunEvent, controller.signal);
+      }
+
       if (!controller.signal.aborted) {
         setPhase((previous) => (previous === 'running' ? 'finished' : previous));
       }
@@ -1621,13 +1638,14 @@ export default function App() {
       setNotice('Hentikan benchmark yang berjalan sebelum memuat mode demo.');
       return;
     }
-    const baseUrl = demoBaseUrl();
+    // Di GitHub Pages tidak ada backend, jadi demo dijalankan sepenuhnya di browser.
+    const baseUrl = IS_STATIC_DEMO ? LOCAL_DEMO_BASE : demoBaseUrl();
     const existing = providers.find((provider) => provider.baseUrl === baseUrl);
     const demoProvider: ProviderProfile = {
       ...createProvider(providers.length, baseUrl),
       id: existing?.id ?? `prov-demo-${Math.random().toString(36).slice(2, 8)}`,
-      label: 'Demo lokal',
-      apiKey: 'demo-key',
+      label: IS_STATIC_DEMO ? STATIC_DEMO_LABEL : 'Demo lokal',
+      apiKey: IS_STATIC_DEMO ? '' : 'demo-key',
       resolvedBaseUrl: baseUrl,
       verified: true,
       validation: {
@@ -1638,7 +1656,9 @@ export default function App() {
         host: hostFromUrl(baseUrl),
         latencyMs: 0,
         modelCount: DEMO_MODELS.length,
-        message: 'Mode demo lokal siap tanpa biaya API.',
+        message: IS_STATIC_DEMO
+          ? 'Mode demo statis berjalan di browser tanpa server.'
+          : 'Mode demo lokal siap tanpa biaya API.',
         verifiedVia: 'models',
       },
       models: DEMO_MODELS,
@@ -1668,8 +1688,12 @@ export default function App() {
     setUndo(null);
     setNotice(
       autoRun
-        ? 'Mode demo dimuat — benchmark dijalankan otomatis.'
-        : 'Mode demo siap. Tekan Jalankan benchmark atau R.',
+        ? IS_STATIC_DEMO
+          ? 'Mode demo statis dimuat — benchmark dijalankan otomatis di browser.'
+          : 'Mode demo dimuat — benchmark dijalankan otomatis.'
+        : IS_STATIC_DEMO
+          ? 'Mode demo statis siap. Tekan Jalankan benchmark atau R.'
+          : 'Mode demo siap. Tekan Jalankan benchmark atau R.',
     );
   }
 
@@ -1967,6 +1991,16 @@ export default function App() {
       </header>
 
       <main id="top">
+        {IS_STATIC_DEMO && (
+          <div className="static-demo-banner" role="status">
+            <Info size={15} />
+            <span>
+              <strong>Mode statis GitHub Pages.</strong> Demo berjalan sepenuhnya di browser.
+              Benchmark provider nyata memerlukan server lokal (<code>npm start</code>).
+            </span>
+          </div>
+        )}
+
         <section className="hero">
           <div className="hero-copy">
             <div className="eyebrow">

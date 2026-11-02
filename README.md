@@ -55,6 +55,25 @@ npm start
 
 Buka `http://localhost:8787`. Frontend hasil build akan disajikan langsung oleh server Express. Port API bisa diubah dengan environment variable `PORT`.
 
+### GitHub Pages (demo statis)
+
+GitHub Pages hanya menyajikan file statis, jadi **backend Express tidak ikut berjalan**. Di sana aplikasi memakai **mode demo statis**: jawaban dan metrik disimulasikan sepenuhnya di browser, tanpa API key dan tanpa request keluar. Benchmark provider nyata tetap memerlukan server lokal (`npm start`).
+
+Workflow `.github/workflows/deploy-pages.yml` otomatis:
+
+1. menjalankan `npm ci` dan `npm run build`;
+2. mem-build dengan `VITE_STATIC_DEMO=true` dan base path `/<nama-repo>/`;
+3. mengunggah `dist` lalu men-deploy ke GitHub Pages.
+
+Aktifkan sekali di repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Setelah itu setiap push ke `main` akan men-deploy ulang.
+
+Untuk mencoba build statis secara lokal:
+
+```bash
+# Windows PowerShell
+$env:VITE_STATIC_DEMO="true"; $env:VITE_BASE_PATH="/FrontStellar-Assess/"; npm run build; npm run preview
+```
+
 ### Mock provider (opsional)
 
 Di terminal terpisah:
@@ -79,7 +98,7 @@ Server produksi menyediakan endpoint demo OpenAI-compatible di `/demo/v1`, jadi 
 - **API key:** `demo-key` (hanya di memori sesi)
 - Model: `demo-sprint`, `demo-turbo`, `demo-mini`, `demo-reasoner`
 
-Demo menghasilkan stream sungguhan dari server lokal sehingga TTFT, TPS, dan latency E2E tetap terukur, tetapi tidak ada biaya API dan tidak ada data yang dikirim ke pihak ketiga.
+Demo menghasilkan stream sungguhan dari server lokal sehingga TTFT, TPS, dan latency E2E tetap terukur, tetapi tidak ada biaya API dan tidak ada data yang dikirim ke pihak ketiga. Saat aplikasi di-deploy ke GitHub Pages, tombol yang sama memuat **Demo statis** yang berjalan di browser (lihat bagian GitHub Pages).
 
 ## Cara pakai
 

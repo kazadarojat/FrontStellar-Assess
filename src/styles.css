@@ -6457,3 +6457,49 @@ tbody tr:hover {
     padding: 8px;
   }
 }
+
+/* ===== Static GitHub Pages banner ===== */
+
+.static-demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 22px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--lime) 28%, var(--line));
+  border-radius: 11px;
+  background: var(--lime-dim);
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.static-demo-banner svg {
+  flex: 0 0 auto;
+  color: var(--lime);
+}
+
+.static-demo-banner strong {
+  color: var(--lime);
+  font-weight: 600;
+}
+
+.static-demo-banner code {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+.static-demo-banner + .hero {
+  padding-top: 34px;
+}
+
+@media (max-width: 620px) {
+  .static-demo-banner {
+    align-items: flex-start;
+    font-size: 10px;
+  }
+}
