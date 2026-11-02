@@ -9,6 +9,7 @@ import {
   loadProviderModels,
   normalizeApiKey,
   providerErrorPayload,
+  normalizeBaseUrl,
   sanitizeMessage,
   validateProvider,
   validateProviderWithChat,
@@ -120,7 +121,7 @@ function cleanBenchmarkProviders(body) {
       id,
       label: String(entry?.label ?? '').trim().slice(0, 80) || `Provider ${index + 1}`,
       baseUrl,
-      resolvedBaseUrl,
+      resolvedBaseUrl: normalizeBaseUrl(resolvedBaseUrl),
       apiKey,
       models,
     };
