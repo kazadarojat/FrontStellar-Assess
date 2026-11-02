@@ -52,11 +52,15 @@ async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): P
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new ApiError('Tidak dapat menghubungi server FrontStellar Assess lokal.');
+    throw new ApiError('Tidak dapat menghubungi API FrontStellar Assess. Periksa deployment backend.');
   }
 
   if (!response.ok) throw await readError(response);
-  return (await response.json()) as T;
+  if (!(response.headers.get('content-type') || '').includes('application/json')) {
+    throw new ApiError('Server mengembalikan respons non-JSON. Periksa routing /api pada hosting.', response.status);
+  }
+  try { return (await response.json()) as T; }
+  catch { throw new ApiError('Respons JSON server tidak valid.', response.status); }
 }
 
 export function validateProvider(baseUrl: string, apiKey: string, signal?: AbortSignal) {
@@ -91,7 +95,7 @@ export async function streamBenchmark(
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new ApiError('Tidak dapat menghubungi server FrontStellar Assess lokal.');
+    throw new ApiError('Tidak dapat menghubungi API FrontStellar Assess. Periksa deployment backend.');
   }
 
   if (!response.ok) throw await readError(response);

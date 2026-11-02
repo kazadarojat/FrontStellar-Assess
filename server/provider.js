@@ -77,7 +77,25 @@ export function normalizeBaseUrl(raw) {
   path = path.replace(/\/+$/, '');
   url.pathname = path || '/';
   const normalized = url.toString().replace(/\/$/, '');
+  enforceProviderHostPolicy(normalized);
   return normalized;
+}
+
+
+// A public deployment must explicitly opt in to each upstream provider.
+// Restricting hostnames blocks arbitrary client-provided internal URLs.
+export function enforceProviderHostPolicy(rawUrl) {
+  const url = new URL(rawUrl);
+  const host = url.hostname.toLowerCase().replace(/\\.$/, '');
+  if (url.username || url.password) {
+    throw new ProviderError('URL provider tidak boleh memuat kredensial.', { code: 'invalid_url' });
+  }
+  if (process.env.NODE_ENV !== 'production') return;
+  const allowed = (process.env.ALLOWED_PROVIDER_HOSTS || '').split(',')
+    .map((value) => value.trim().toLowerCase()).filter(Boolean);
+  if (url.protocol !== 'https:' || !allowed.includes(host) || !allowed.length) {
+    throw new ProviderError('Host provider tidak diizinkan. Atur ALLOWED_PROVIDER_HOSTS pada deployment.', { code: 'host_not_allowed' });
+  }
 }
 
 export function buildBaseCandidates(raw) {
